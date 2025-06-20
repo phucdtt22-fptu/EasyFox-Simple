@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 export default function RegisterForm() {
@@ -12,21 +13,52 @@ export default function RegisterForm() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const { signUp } = useAuth()
+  const router = useRouter()
+
+  // Debug log để theo dõi success state
+  console.log('RegisterForm render - success state:', success)
+
+  // Auto redirect sau 5 giây nếu signup thành công
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => {
+        console.log('Auto redirecting to home after successful signup')
+        router.push('/')
+      }, 5000)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [success, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
 
-    const { error } = await signUp(email, password, name)
-    
-    if (error) {
-      setError(error.message)
-    } else {
-      setSuccess(true)
+    try {
+      console.log('Starting signup process for:', email)
+      const { data, error } = await signUp(email, password, name)
+      
+      console.log('Signup response:', { data, error })
+      
+      if (error) {
+        console.error('Signup error:', error)
+        setError(error.message)
+        setLoading(false)
+      } else {
+        console.log('Signup successful, setting success state')
+        setLoading(false)
+        // Force a small delay to ensure state update
+        setTimeout(() => {
+          console.log('Setting success state now')
+          setSuccess(true)
+        }, 100)
+      }
+    } catch (err) {
+      console.error('Unexpected signup error:', err)
+      setError('Đã xảy ra lỗi không mong muốn. Vui lòng thử lại.')
+      setLoading(false)
     }
-    
-    setLoading(false)
   }
 
   if (success) {
@@ -51,9 +83,20 @@ export default function RegisterForm() {
               <p className="text-green-600 text-sm mb-2">
                 Vui lòng kiểm tra hộp thư đến (và cả thư mục spam) để kích hoạt tài khoản.
               </p>
-              <p className="text-gray-600 text-xs">
+              <p className="text-gray-600 text-xs mb-3">
                 Sau khi xác thực email, bạn sẽ được chuyển hướng tự động về trang chính.
               </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => router.push('/')}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                >
+                  Đi đến trang chính
+                </button>
+                <p className="text-gray-500 text-xs py-2">
+                  Tự động chuyển sau 5 giây...
+                </p>
+              </div>
             </div>
             <Link
               href="/login"

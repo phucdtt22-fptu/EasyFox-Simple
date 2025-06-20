@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import Link from 'next/link'
 
@@ -10,6 +11,7 @@ export default function LoginForm() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const { signIn } = useAuth()
+  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -23,7 +25,9 @@ export default function LoginForm() {
       console.error('Login error:', error)
       setError(error.message)
     } else {
-      console.log('Login successful')
+      console.log('Login successful, redirecting to homepage...')
+      // Redirect to homepage after successful login
+      router.replace('/')
     }
     
     setLoading(false)

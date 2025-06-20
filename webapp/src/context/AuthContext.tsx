@@ -43,37 +43,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const signUp = async (email: string, password: string, name: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          name,
-        },
-        // Cấu hình redirect URL cho email confirmation
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}${process.env.NEXT_PUBLIC_AUTH_REDIRECT_URL || '/'}`,
-      },
-    })
-
-    if (!error && data.user) {
-      // Create user record in our custom users table
-      const { error: userError } = await supabase
-        .from('users')
-        .insert([
-          {
-            id: data.user.id,
-            email: data.user.email!,
+    // Sử dụng production URL làm default nếu không có biến môi trường
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://e.tinmoius.com'
+    const redirectPath = process.env.NEXT_PUBLIC_AUTH_REDIRECT_URL || '/auth/callback'
+    const emailRedirectTo = `${siteUrl}${redirectPath}`
+    
+    console.log('Starting signUp with:', { email, name, emailRedirectTo })
+    
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
             name,
-            notes: null,
           },
-        ])
+          // Cấu hình redirect URL cho email confirmation
+          emailRedirectTo,
+        },
+      })
 
-      if (userError) {
-        console.error('Error creating user record:', userError)
+      console.log('Supabase signUp response:', { data, error })
+
+      if (!error && data.user) {
+        console.log('Creating user record in database...')
+        // Create user record in our custom users table
+        const { error: userError } = await supabase
+          .from('users')
+          .insert([
+            {
+              id: data.user.id,
+              email: data.user.email!,
+              name,
+              notes: null,
+            },
+          ])
+
+        if (userError) {
+          console.error('Error creating user record:', userError)
+          // Don't fail the signup if user record creation fails
+        } else {
+          console.log('User record created successfully')
+        }
       }
-    }
 
-    return { data, error }
+      return { data, error }
+    } catch (err) {
+      console.error('Unexpected error in signUp:', err)
+      return { data: null, error: { message: 'Đã xảy ra lỗi không mong muốn' } }
+    }
   }
 
   const signIn = async (email: string, password: string) => {
@@ -82,11 +100,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Thêm phương thức đăng nhập bằng magic link
   const signInWithMagicLink = async (email: string) => {
+    // Sử dụng production URL làm default nếu không có biến môi trường
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://e.tinmoius.com'
+    const redirectPath = process.env.NEXT_PUBLIC_AUTH_REDIRECT_URL || '/auth/callback'
+    const emailRedirectTo = `${siteUrl}${redirectPath}`
+    
+    console.log('Magic link redirect URL:', emailRedirectTo)
+    
     return await supabase.auth.signInWithOtp({
       email,
       options: {
         // Cấu hình redirect URL cho magic link
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}${process.env.NEXT_PUBLIC_AUTH_REDIRECT_URL || '/'}`,
+        emailRedirectTo,
       },
     })
   }

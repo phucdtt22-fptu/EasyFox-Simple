@@ -10,8 +10,9 @@ export interface User {
 export interface ChatMessage {
   id: string
   user_id: string
-  question: string
+  question: string | null // Can be null for AI-initiated messages
   ai_response: string
+  chat_session_id: string
   created_at: string
 }
 
@@ -23,6 +24,7 @@ export interface Campaign {
   target_audience: string | null
   goals: string | null
   content_pillars: string | null
+  notes: string | null // AI-collected information and conversation history
   created_at: string
   updated_at: string
 }
@@ -55,4 +57,6 @@ export interface N8NRequest {
     name: string
     notes: string | null
   }
+  campaigns?: Campaign[] // Include user's campaigns for context
+  is_welcome_message?: boolean
 }

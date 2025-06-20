@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS public.chat_history (
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
     question TEXT NOT NULL,
     ai_response TEXT NOT NULL,
+    chat_session_id TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -36,6 +37,7 @@ CREATE TABLE IF NOT EXISTS public.campaigns (
     target_audience TEXT,
     goals TEXT,
     content_pillars JSONB, -- Store as JSON array
+    notes TEXT, -- AI-collected information and conversation history
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -45,7 +47,7 @@ CREATE TABLE IF NOT EXISTS public.schedule (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     campaign_id UUID REFERENCES public.campaigns(id) ON DELETE CASCADE NOT NULL,
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
-    scheduled_date DATE NOT NULL,
+    scheduled_date TIMESTAMPTZ NOT NULL,
     platform TEXT NOT NULL, -- 'facebook', 'instagram', 'tiktok', etc.
     content_pillar TEXT, -- Tier 1: Content Pillars
     content_category TEXT, -- Tier 2: Content Categories  
@@ -73,6 +75,7 @@ CREATE TABLE IF NOT EXISTS public.settings (
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_chat_history_user_id ON public.chat_history(user_id);
 CREATE INDEX IF NOT EXISTS idx_chat_history_created_at ON public.chat_history(created_at);
+CREATE INDEX IF NOT EXISTS idx_chat_history_session_id ON public.chat_history(chat_session_id);
 CREATE INDEX IF NOT EXISTS idx_campaigns_user_id ON public.campaigns(user_id);
 CREATE INDEX IF NOT EXISTS idx_schedule_user_id ON public.schedule(user_id);
 CREATE INDEX IF NOT EXISTS idx_schedule_campaign_id ON public.schedule(campaign_id);
