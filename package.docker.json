@@ -1,0 +1,15 @@
+{
+  "name": "easyfox-scripts",
+  "version": "1.0.0",
+  "scripts": {
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:restart": "docker-compose restart",
+    "docker:clean": "docker-compose down -v --rmi all",
+    "prod:setup": "cp .env.production.example .env.production",
+    "prod:deploy": "./deploy.sh",
+    "health:check": "curl -f http://localhost:3001/health && curl -f http://localhost:3000"
+  }
+}

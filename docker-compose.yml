@@ -1,0 +1,51 @@
+services:
+  frontend:
+    image: phucdtt22fptu/easyfox-simple-fe:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_SUPABASE_URL=https://niyvcieaapojhoqyinmg.supabase.co
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5peXZjaWVhYXBvamhvcXlpbm1nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk2MzMwODAsImV4cCI6MjA2NTIwOTA4MH0.Lc6BlY0As7UcgdVDJzTytLyEmq6TlzxTPBdUcfncLYY
+      - NEXT_PUBLIC_API_URL=http://backend:3001
+      # Email Authentication Configuration
+      - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+      - NEXT_PUBLIC_AUTH_REDIRECT_URL=${NEXT_PUBLIC_AUTH_REDIRECT_URL:-/auth/callback}
+      - NEXT_PUBLIC_AUTH_ERROR_URL=${NEXT_PUBLIC_AUTH_ERROR_URL:-/login?error=auth_failed}
+      # AI Configuration - THÊM NHỮNG DÒNG NÀY
+      - GEMINI_API_KEY=AIzaSyA9wyjouTfYfyn9SGtZe9BxbFwil9F4oZ0
+      - GOOGLE_API_KEY=AIzaSyA9wyjouTfYfyn9SGtZe9BxbFwil9F4oZ0
+      - GEMINI_CHAT_MODEL=gemini-1.5-flash
+      - GEMINI_SUGGESTION_MODEL=gemini-1.5-flash
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    image: phucdtt22fptu/easyfox-simple-be:latest
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - NEXT_PUBLIC_SUPABASE_URL=https://niyvcieaapojhoqyinmg.supabase.co
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5peXZjaWVhYXBvamhvcXlpbm1nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk2MzMwODAsImV4cCI6MjA2NTIwOTA4MH0.Lc6BlY0As7UcgdVDJzTytLyEmq6TlzxTPBdUcfncLYY
+      - N8N_WEBHOOK_URL=https://n8n.aiphuc.com/webhook/easyfox-ai-assistant
+      - JWT_SECRET=easyfox-jwt-secret-key-2025-production
+      - FRONTEND_URL=http://frontend:3000
+      # AI Configuration - THÊM NHỮNG DÒNG NÀY
+      - GEMINI_API_KEY=AIzaSyA9wyjouTfYfyn9SGtZe9BxbFwil9F4oZ0
+      - GOOGLE_API_KEY=AIzaSyA9wyjouTfYfyn9SGtZe9BxbFwil9F4oZ0
+      - GEMINI_CHAT_MODEL=gemini-1.5-flash
+      - GEMINI_SUGGESTION_MODEL=gemini-1.5-flash
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  default:
+    driver: bridge

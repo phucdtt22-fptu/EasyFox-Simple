@@ -1,0 +1,57 @@
+services:
+  frontend:
+    image: phucdtt22fptu/easyfox-simple-fe:lastest
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - API_URL=https://be.aiphuc.com
+      - NEXT_PUBLIC_SUPABASE_URL=https://niyvcieaapojhoqyinmg.supabase.co
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5peXZjaWVhYXBvamhvcXlpbm1nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk2MzMwODAsImV4cCI6MjA2NTIwOTA4MH0.Lc6BlY0As7UcgdVDJzTytLyEmq6TlzxTPBdUcfncLYY
+      - NEXT_PUBLIC_API_URL=https://be.aiphuc.com
+      # Email Authentication Configuration - Update these for production
+      - NEXT_PUBLIC_SITE_URL=https://e.aiphuc.com
+      - NEXT_PUBLIC_AUTH_REDIRECT_URL=/auth/callback
+      - NEXT_PUBLIC_AUTH_ERROR_URL=/login?error=auth_failed
+      # AI Configuration - THÊM NHỮNG DÒNG NÀY
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GOOGLE_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_CHAT_MODEL=${GEMINI_CHAT_MODEL:-gemini-1.5-pro}
+      - GEMINI_SUGGESTION_MODEL=${GEMINI_SUGGESTION_MODEL:-gemini-1.5-flash}
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    image: phucdtt22fptu/easyfox-simple-be:latest
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GOOGLE_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_CHAT_MODEL=${GEMINI_CHAT_MODEL:-gemini-1.5-pro}
+      - GEMINI_SUGGESTION_MODEL=${GEMINI_SUGGESTION_MODEL:-gemini-1.5-flash}
+      - NEXT_PUBLIC_SUPABASE_URL=https://niyvcieaapojhoqyinmg.supabase.co
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5peXZjaWVhYXBvamhvcXlpbm1nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk2MzMwODAsImV4cCI6MjA2NTIwOTA4MH0.Lc6BlY0As7UcgdVDJzTytLyEmq6TlzxTPBdUcfncLYY
+      - SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5peXZjaWVhYXBvamhvcXlpbm1nIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYzMzA4MCwiZXhwIjoyMDY1MjA5MDgwfQ.1K8-GCpvdJ4J-BO0DvKsEQSB8rO-n-X3ibtON9L9dpo
+      - N8N_WEBHOOK_URL=https://n8n.aiphuc.com/webhook/easyfox-ai-assistant
+      - JWT_SECRET=easyfox-jwt-secret-key-2025-production
+      - FRONTEND_URL=https://e.aiphuc.com
+      # CORS Configuration
+      - CORS_ORIGIN=https://e.aiphuc.com
+      - CORS_METHODS=GET,POST,PUT,DELETE,OPTIONS
+      - CORS_ALLOWED_HEADERS=Content-Type,Authorization,X-Requested-With
+      - CORS_CREDENTIALS=true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  default:
+    driver: bridge

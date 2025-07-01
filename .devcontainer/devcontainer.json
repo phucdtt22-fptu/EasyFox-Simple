@@ -1,0 +1,58 @@
+{
+  "name": "EasyFox Development Environment",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-20-bullseye",
+  
+  // Configure tool-specific properties
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.vscode-typescript-next",
+        "bradlc.vscode-tailwindcss",
+        "esbenp.prettier-vscode",
+        "ms-vscode.vscode-json"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+
+  // Forward ports and set them to public by default
+  "forwardPorts": [3000, 3001],
+  "portsAttributes": {
+    "3000": {
+      "label": "EasyFox Frontend",
+      "visibility": "public",
+      "protocol": "https"
+    },
+    "3001": {
+      "label": "EasyFox Backend API", 
+      "visibility": "public",
+      "protocol": "https"
+    }
+  },
+
+  // Use 'postCreateCommand' to run commands after the container is created
+  "postCreateCommand": "npm install",
+
+  // Use 'postStartCommand' to run commands after the container starts
+  "postStartCommand": "echo '🦊 EasyFox Codespace is ready! Run ./dev-start.sh to begin development.'",
+
+  // Configure the shell
+  "postAttachCommand": {
+    "server": "echo '📦 Installing dependencies...' && npm install"
+  },
+
+  // Set environment variables
+  "containerEnv": {
+    "NODE_ENV": "development"
+  },
+
+  // Configure features
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    }
+  }
+}
