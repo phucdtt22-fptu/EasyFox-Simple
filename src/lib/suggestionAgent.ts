@@ -1,5 +1,5 @@
 // TypeScript version of SuggestionAgent for Next.js API routes
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { ChatOpenAI } from "@langchain/openai";
 
 interface User {
   id: string;
@@ -30,50 +30,39 @@ interface ContentBlock {
 }
 
 export class SuggestionAgent {
-  private suggestionModel: ChatGoogleGenerativeAI;
+  private suggestionModel: ChatOpenAI;
 
   constructor() {
     // Debug environment variables trong Next.js runtime
     console.log('🔧 SuggestionAgent constructor called');
     console.log('🌍 Environment check:');
     console.log('   - NODE_ENV:', process.env.NODE_ENV);
-    console.log('   - All env keys containing GEMINI/GOOGLE/API:', 
-      Object.keys(process.env).filter(k => 
-        k.toLowerCase().includes('gemini') || 
-        k.toLowerCase().includes('google') || 
-        k.toLowerCase().includes('api')
-      )
-    );
+    console.log('   - OPENAI_API_KEY available:', !!process.env.OPENAI_API_KEY);
     
-    // Đọc trực tiếp từ process.env với fallback
-    const googleApiKey = process.env.GOOGLE_API_KEY;
-    const geminiApiKey = process.env.GEMINI_API_KEY;
+    // Đọc trực tiếp từ process.env
+    const openaiApiKey = process.env.OPENAI_API_KEY;
     
     console.log('🔑 API Keys check:');
-    console.log('   - GOOGLE_API_KEY:', googleApiKey ? `${googleApiKey.substring(0, 10)}...` : 'MISSING');
-    console.log('   - GEMINI_API_KEY:', geminiApiKey ? `${geminiApiKey.substring(0, 10)}...` : 'MISSING');
+    console.log('   - OPENAI_API_KEY:', openaiApiKey ? `${openaiApiKey.substring(0, 10)}...` : 'MISSING');
     
-    const apiKey = googleApiKey || geminiApiKey;
-    
-    if (!apiKey) {
-      console.error('❌ No API key found in environment');
-      console.error('   Available env vars:', Object.keys(process.env).slice(0, 10));
-      throw new Error('Missing GOOGLE_API_KEY or GEMINI_API_KEY environment variable');
+    if (!openaiApiKey) {
+      console.error('❌ No OPENAI_API_KEY found in environment');
+      throw new Error('Missing OPENAI_API_KEY environment variable');
     }
 
-    console.log('✅ Using API key:', apiKey.substring(0, 10) + '...');
+    console.log('✅ Using OpenAI API key:', openaiApiKey.substring(0, 10) + '...');
 
     // Khởi tạo model
     try {
-      this.suggestionModel = new ChatGoogleGenerativeAI({
-        model: process.env.GEMINI_SUGGESTION_MODEL || "gemini-1.5-flash",
+      this.suggestionModel = new ChatOpenAI({
+        modelName: process.env.OPENAI_SUGGESTION_MODEL || "gpt-3.5-turbo",
         temperature: 0.5,
-        apiKey: apiKey,
+        openAIApiKey: openaiApiKey,
       });
       
-      console.log('🎯 SuggestionAgent initialized successfully');
+      console.log('🎯 SuggestionAgent initialized successfully with OpenAI');
     } catch (modelError) {
-      console.error('❌ Failed to initialize ChatGoogleGenerativeAI:', modelError);
+      console.error('❌ Failed to initialize ChatOpenAI:', modelError);
       throw modelError;
     }
   }
@@ -106,9 +95,15 @@ ${lastMessage?.question ? `User: ${lastMessage.question}` : 'Chưa có tin nhắ
 ${lastMessage?.ai_response ? `AI: ${lastMessage.ai_response}` : ''}
 
 NHIỆM VỤ: 
-Tạo 4 gợi ý ngắn gọn (8-15 từ) cho những gì user có thể nói/hỏi tiếp theo.
+Phân tích tin nhắn cuối cùng của AI và tạo 4 gợi ý ngắn gọn (8-15 từ) cho những gì USER có thể TRẢ LỜI lại.
 
-QUAN TRỌNG: Chỉ trả về JSON array đơn giản, không thêm text hay giải thích gì khác.
+QUAN TRỌNG: 
+- Nếu AI vừa hỏi một câu hỏi → tạo gợi ý trả lời cho câu hỏi đó
+- Nếu AI vừa chào hỏi → tạo gợi ý cách user có thể bắt đầu cuộc trò chuyện
+- Nếu AI vừa đưa ra thông tin → tạo gợi ý câu hỏi tiếp theo hoặc phản hồi
+- Luôn đóng vai KHÁCH HÀNG trả lời AI, không phải AI hỏi khách hàng
+
+Chỉ trả về JSON array đơn giản, không thêm text hay giải thích gì khác.
 
 VÍ DỤ FORMAT:
 ["Tôi muốn tạo chiến dịch marketing mới", "Hãy xem các chiến dịch hiện tại", "Giúp tôi lên lịch đăng bài", "Tư vấn tối ưu hóa nội dung"]
@@ -120,20 +115,16 @@ Chỉ trả về JSON array như ví dụ trên, không có text nào khác!`;
       console.log(`   - Business type: ${businessType}`);
       console.log(`   - Last message: ${lastMessage?.question ? 'YES' : 'NO'}`);
 
-      const messages = [
-        { role: 'user' as const, content: suggestionPrompt }
-      ];
-
-      console.log('🚀 Calling suggestion model...');
-      console.log('📤 Sending prompt to Gemini API...');
+      console.log('🚀 Calling OpenAI suggestion model...');
+      console.log('📤 Sending prompt to OpenAI API...');
       console.log('🔗 Model endpoint will be called with temperature 0.5...');
       
       const startTime = Date.now();
-      const result = await this.suggestionModel.invoke(messages);
+      const result = await this.suggestionModel.invoke(suggestionPrompt);
       const endTime = Date.now();
       
-      console.log(`⏱️ Gemini API call took ${endTime - startTime}ms`);
-      console.log('📥 Received response from Gemini API');
+      console.log(`⏱️ OpenAI API call took ${endTime - startTime}ms`);
+      console.log('📥 Received response from OpenAI API');
       
       // Handle different types of content
       const contentStr = typeof result.content === 'string' 
@@ -146,7 +137,7 @@ Chỉ trả về JSON array như ví dụ trên, không có text nào khác!`;
       console.log('🔍 Raw suggestion response preview:', contentStr.substring(0, 300) + '...');
       
       if (!contentStr || contentStr.length === 0) {
-        console.log('⚠️ Empty response from Gemini API');
+        console.log('⚠️ Empty response from OpenAI API');
         return this.getFallbackSuggestions(!!businessContext?.notes);
       }
       
@@ -249,15 +240,15 @@ Chỉ trả về JSON array như ví dụ trên, không có text nào khác!`;
   // Fallback suggestions when AI fails
   private getFallbackSuggestions(hasOnboarding: boolean): SuggestionResult {
     const fallbackSuggestions = hasOnboarding ? [
-      "Tôi muốn tạo chiến dịch marketing mới",
-      "Hãy xem các chiến dịch hiện tại của tôi", 
-      "Giúp tôi lên lịch đăng bài",
-      "Tư vấn tối ưu hóa nội dung"
+      "Tôi muốn tạo chiến dịch mới",
+      "Xem chiến dịch hiện tại", 
+      "Giúp lên lịch đăng bài",
+      "Tư vấn tối ưu nội dung"
     ] : [
-      "Thiết lập thông tin doanh nghiệp",
-      "Tôi cần hướng dẫn bắt đầu",
-      "EasyFox có thể giúp gì cho tôi?",
-      "Tạo chiến dịch marketing đầu tiên"
+      "Tôi cần thiết lập doanh nghiệp",
+      "Hướng dẫn tôi bắt đầu",
+      "EasyFox có gì hay ho?",
+      "Tạo chiến dịch đầu tiên"
     ];
 
     return {

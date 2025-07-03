@@ -8,10 +8,8 @@
     "dev": "nodemon index.js"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.21.0",
-    "@langchain/core": "^0.3.55",
-    "@langchain/google-genai": "^0.2.13",
-    "@langchain/openai": "^0.0.17",
+    "@langchain/core": "^0.3.61",
+    "@langchain/openai": "^0.5.16",
     "@supabase/supabase-js": "^2.38.0",
     "axios": "^1.6.0",
     "cors": "^2.8.5",

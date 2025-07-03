@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/context/AuthContext';
-import { ModernChatInterface } from '@/components/ui/modern-chat-interface';
+import SimpleChatInterface from '@/components/SimpleChatInterface';
 import LoginForm from '@/components/LoginForm';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
@@ -16,5 +16,5 @@ export default function Home() {
     );
   }
 
-  return user ? <ModernChatInterface /> : <LoginForm />;
+  return user ? <SimpleChatInterface /> : <LoginForm />;
 }

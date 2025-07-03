@@ -1,23 +1,22 @@
 services:
   frontend:
-    image: phucdtt22fptu/easyfox-simple-fe:lastest
+    image: phucdtt22fptu/easyfox-simple-fe:latest
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - API_URL=https://be.aiphuc.com
+      - API_URL=https://be.tinmoius.com
       - NEXT_PUBLIC_SUPABASE_URL=https://niyvcieaapojhoqyinmg.supabase.co
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5peXZjaWVhYXBvamhvcXlpbm1nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk2MzMwODAsImV4cCI6MjA2NTIwOTA4MH0.Lc6BlY0As7UcgdVDJzTytLyEmq6TlzxTPBdUcfncLYY
-      - NEXT_PUBLIC_API_URL=https://be.aiphuc.com
-      # Email Authentication Configuration - Update these for production
-      - NEXT_PUBLIC_SITE_URL=https://e.aiphuc.com
+      - NEXT_PUBLIC_API_URL=https://be.tinmoius.com
+      # Email Authentication Configuration
+      - NEXT_PUBLIC_SITE_URL=https://e.tinmoius.com
       - NEXT_PUBLIC_AUTH_REDIRECT_URL=/auth/callback
       - NEXT_PUBLIC_AUTH_ERROR_URL=/login?error=auth_failed
-      # AI Configuration - THÊM NHỮNG DÒNG NÀY
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GOOGLE_API_KEY=${GEMINI_API_KEY}
-      - GEMINI_CHAT_MODEL=${GEMINI_CHAT_MODEL:-gemini-1.5-pro}
-      - GEMINI_SUGGESTION_MODEL=${GEMINI_SUGGESTION_MODEL:-gemini-1.5-flash}
+      # OpenAI Configuration - Only OpenAI, no Gemini/N8N
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-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}
+      - OPENAI_CHAT_MODEL=${OPENAI_CHAT_MODEL:-gpt-4o-mini}
+      - OPENAI_SUGGESTION_MODEL=${OPENAI_SUGGESTION_MODEL:-gpt-3.5-turbo}
     depends_on:
       - backend
     restart: unless-stopped
@@ -29,18 +28,17 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GOOGLE_API_KEY=${GEMINI_API_KEY}
-      - GEMINI_CHAT_MODEL=${GEMINI_CHAT_MODEL:-gemini-1.5-pro}
-      - GEMINI_SUGGESTION_MODEL=${GEMINI_SUGGESTION_MODEL:-gemini-1.5-flash}
       - NEXT_PUBLIC_SUPABASE_URL=https://niyvcieaapojhoqyinmg.supabase.co
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5peXZjaWVhYXBvamhvcXlpbm1nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk2MzMwODAsImV4cCI6MjA2NTIwOTA4MH0.Lc6BlY0As7UcgdVDJzTytLyEmq6TlzxTPBdUcfncLYY
-      - SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5peXZjaWVhYXBvamhvcXlpbm1nIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYzMzA4MCwiZXhwIjoyMDY1MjA5MDgwfQ.1K8-GCpvdJ4J-BO0DvKsEQSB8rO-n-X3ibtON9L9dpo
-      - N8N_WEBHOOK_URL=https://n8n.aiphuc.com/webhook/easyfox-ai-assistant
-      - JWT_SECRET=easyfox-jwt-secret-key-2025-production
-      - FRONTEND_URL=https://e.aiphuc.com
+      - SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5peXZjaWVhYXBvamhvcXlpbm1nIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYzMzA4MCwiZXhwIjoyMDY1MjA5MDgwfQ.PQBGm_9whxbRmxuTaNTw9NEejGgNnQUvWK5P49ib9Gk
+      - JWT_SECRET=easyfox-jwt-secret-key-2025-production-11022004
+      - FRONTEND_URL=https://e.tinmoius.com
+      # OpenAI Configuration - Only OpenAI, no Gemini/N8N
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-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}
+      - OPENAI_CHAT_MODEL=${OPENAI_CHAT_MODEL:-gpt-4o-mini}
+      - OPENAI_SUGGESTION_MODEL=${OPENAI_SUGGESTION_MODEL:-gpt-3.5-turbo}
       # CORS Configuration
-      - CORS_ORIGIN=https://e.aiphuc.com
+      - CORS_ORIGIN=https://e.tinmoius.com
       - CORS_METHODS=GET,POST,PUT,DELETE,OPTIONS
       - CORS_ALLOWED_HEADERS=Content-Type,Authorization,X-Requested-With
       - CORS_CREDENTIALS=true

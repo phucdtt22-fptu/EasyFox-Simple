@@ -47,9 +47,8 @@ export async function POST(req: NextRequest) {
     let suggestionAgent: SuggestionAgent;
     try {
       console.log('🔧 Initializing SuggestionAgent...');
-      console.log('🔑 GOOGLE_API_KEY available:', !!process.env.GOOGLE_API_KEY);
-      console.log('🔑 GEMINI_API_KEY available:', !!process.env.GEMINI_API_KEY);
-      console.log('🎯 Model:', process.env.GEMINI_SUGGESTION_MODEL || "gemini-1.5-flash");
+      console.log('🔑 OPENAI_API_KEY available:', !!process.env.OPENAI_API_KEY);
+      console.log('🎯 Model:', process.env.OPENAI_SUGGESTION_MODEL || "gpt-3.5-turbo");
       
       suggestionAgent = new SuggestionAgent();
       console.log('✅ SuggestionAgent initialized successfully');
@@ -58,8 +57,7 @@ export async function POST(req: NextRequest) {
       console.error('❌ Error details:', {
         message: initError instanceof Error ? initError.message : 'Unknown error',
         stack: initError instanceof Error ? initError.stack : undefined,
-        googleApiKey: process.env.GOOGLE_API_KEY ? 'Present' : 'Missing',
-        geminiApiKey: process.env.GEMINI_API_KEY ? 'Present' : 'Missing'
+        openaiApiKey: process.env.OPENAI_API_KEY ? 'Present' : 'Missing'
       });
       
       // Fallback suggestions based on context
@@ -92,7 +90,7 @@ export async function POST(req: NextRequest) {
     
     // Generate suggestions using the dedicated agent
     const result = await suggestionAgent.generateSuggestions(
-      userInfo,
+      userInfo as { id: string; business_name?: string; business_type?: string; target_audience?: string; notes?: string },
       lastMessage,
       businessContext
     );

@@ -8,9 +8,13 @@ FE_IMAGE_NAME="easyfox-simple-fe"
 BE_IMAGE_NAME="easyfox-simple-be"
 TAG="latest"
 
-# Build frontend
+# Build frontend with required environment variables
 echo "📦 Building frontend..."
-docker build -t ${DOCKER_USERNAME}/${FE_IMAGE_NAME}:${TAG} .
+docker build \
+  --build-arg NEXT_PUBLIC_SUPABASE_URL="https://niyvcieaapojhoqyinmg.supabase.co" \
+  --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5peXZjaWVhYXBvamhvcXlpbm1nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk2MzMwODAsImV4cCI6MjA2NTIwOTA4MH0.Lc6BlY0As7UcgdVDJzTytLyEmq6TlzxTPBdUcfncLYY" \
+  --build-arg NEXT_PUBLIC_API_URL="https://be.tinmoius.com" \
+  -t ${DOCKER_USERNAME}/${FE_IMAGE_NAME}:${TAG} .
 
 # Build backend
 echo "📦 Building backend..."

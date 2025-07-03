@@ -38,7 +38,14 @@ export async function GET(
     // Group by session and get session info
     const sessionMap = new Map()
     
-    data?.forEach((message) => {
+    interface ChatMessage {
+      chat_session_id: string;
+      created_at: string;
+      question: string | null;
+      ai_response: string | null;
+    }
+    
+    (data as ChatMessage[])?.forEach((message) => {
       const sessionId = message.chat_session_id
       if (!sessionMap.has(sessionId)) {
         sessionMap.set(sessionId, {
@@ -46,7 +53,8 @@ export async function GET(
           created_at: message.created_at,
           first_message: message.question || 'Chat mới',
           message_count: 0,
-          last_updated: message.created_at
+          last_updated: message.created_at,
+          first_message_set: false
         })
       }
       
@@ -54,7 +62,7 @@ export async function GET(
       session.message_count++
       
       // Use the first user question as session title
-      if (message.question && !session.first_message_set) {
+      if (message.question && typeof message.question === 'string' && !session.first_message_set) {
         session.first_message = message.question.substring(0, 50) + (message.question.length > 50 ? '...' : '')
         session.first_message_set = true
       }

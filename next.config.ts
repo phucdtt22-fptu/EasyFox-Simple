@@ -12,13 +12,10 @@ const nextConfig: NextConfig = {
     unoptimized: true, // For static export compatibility
   },
   
-  // Experimental features
-  experimental: {
-    // Enable modern bundling
-    turbo: {
-      loaders: {
-        '.svg': ['@svgr/webpack'],
-      },
+  // Turbopack configuration (now stable)
+  turbopack: {
+    rules: {
+      '*.svg': ['@svgr/webpack'],
     },
   },
 };

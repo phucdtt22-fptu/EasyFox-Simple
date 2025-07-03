@@ -1,17 +1,35 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+// Lazy initialization của Supabase client để tránh lỗi khi build
+let _supabase: ReturnType<typeof createClient> | null = null
 
-// Cấu hình Supabase client với auth options
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    // Tự động refresh token
-    autoRefreshToken: true,
-    // Persist session trong localStorage
-    persistSession: true,
-    // Detect session trong URL
-    detectSessionInUrl: true
+function getSupabaseClient() {
+  if (!_supabase) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Missing Supabase environment variables')
+    }
+    
+    _supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        // Tự động refresh token
+        autoRefreshToken: true,
+        // Persist session trong localStorage
+        persistSession: true,
+        // Detect session trong URL
+        detectSessionInUrl: true
+      }
+    })
+  }
+  return _supabase
+}
+
+// Export as a getter để lazy load
+export const supabase = new Proxy({} as ReturnType<typeof createClient>, {
+  get(_, prop) {
+    return getSupabaseClient()[prop as keyof ReturnType<typeof createClient>]
   }
 })
 

@@ -44,9 +44,10 @@ export default function ProfilePage() {
         return;
       }
 
-      setProfile(data);
+      const profileData = data as unknown as UserProfile;
+      setProfile(profileData);
       setFormData({
-        name: data.name || ''
+        name: profileData?.name || ''
       });
     } catch (error) {
       console.error('Error loading profile:', error);
@@ -101,15 +102,13 @@ export default function ProfilePage() {
 
     setDeleting(true);
     try {
-      // Call Next.js API route to delete user account
-      const response = await fetch('/api/users/delete', {
+      // Call backend API to delete user account completely
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${apiUrl}/api/delete-account/${user.id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          user_id: user.id,
-        }),
       });
 
       if (!response.ok) {
@@ -125,7 +124,7 @@ export default function ProfilePage() {
       }
 
       const result = await response.json();
-      console.log('Account deletion result:', result);
+      console.log('✅ Account deletion successful:', result);
 
       // If successful, sign out and redirect
       await signOut();
@@ -282,6 +281,26 @@ export default function ProfilePage() {
               Xóa tài khoản
             </Button>
           </div>
+
+          {/* Quick Test for Development */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+              <p className="text-yellow-700 text-sm mb-3">
+                <strong>🧪 Development Test:</strong> Xóa tài khoản nhanh để test onboarding flow
+              </p>
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  if (confirm('🧪 Test Mode: Xóa tài khoản để test onboarding?')) {
+                    await handleDeleteAccount();
+                  }
+                }}
+                className="border-yellow-300 text-yellow-600 hover:bg-yellow-100 hover:border-yellow-400"
+              >
+                🧪 Test Delete Account
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 

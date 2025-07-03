@@ -3,6 +3,7 @@ const cors = require('cors');
 const axios = require('axios');
 const { createClient } = require('@supabase/supabase-js');
 const LangChainMarketingAgent = require('./services/langchainMarketingAgent');
+const SuggestionAgent = require('./services/suggestionAgent');
 require('dotenv').config();
 
 const app = express();
@@ -40,8 +41,13 @@ if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_A
   process.exit(1);
 }
 
-if (!process.env.GEMINI_API_KEY) {
-  console.error('❌ GEMINI_API_KEY is required for AI functionality');
+if (!process.env.OPENAI_API_KEY) {
+  console.error('❌ OPENAI_API_KEY is required for AI functionality');
+  process.exit(1);
+}
+
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('❌ SUPABASE_SERVICE_ROLE_KEY is required for admin operations');
   process.exit(1);
 }
 
@@ -51,8 +57,9 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-// Initialize Marketing Agent
+// Initialize AI agents
 const langchainAgent = new LangChainMarketingAgent(supabase);
+const suggestionAgent = new SuggestionAgent();
 
 // Rate limiting storage
 const rateLimitMap = new Map();
@@ -226,7 +233,7 @@ app.post('/api/chat', async (req, res) => {
 
     // Special handling for suggestion requests - SKIP ALL OTHER CHECKS
     if (is_suggestion_request) {
-      console.log('📝 Generating AI-powered suggestions - skipping all spam and rate limit checks');
+      console.log('� Using lightweight SuggestionAgent for faster suggestions');
       
       try {
         // Get user onboarding notes (as text paragraph, not JSON)
@@ -264,25 +271,27 @@ app.post('/api/chat', async (req, res) => {
           });
         }
 
-        const result = await langchainAgent.processMessage(user_id, question, onboardingNotes, recentChatHistory);
+        const result = await suggestionAgent.generateSuggestions(
+          user_info,
+          recentChatHistory.length > 0 ? {
+            question: recentChatHistory[recentChatHistory.length - 1]?.role === 'user' ? recentChatHistory[recentChatHistory.length - 1]?.content : null,
+            ai_response: recentChatHistory[recentChatHistory.length - 1]?.role === 'assistant' ? recentChatHistory[recentChatHistory.length - 1]?.content : null
+          } : null,
+          { notes: onboardingNotes }
+        );
         
         if (result.success) {
           console.log('✅ AI suggestions generated successfully');
           
           // Log the response to ensure it's correct
-          try {
-            const parsedResponse = JSON.parse(result.response);
-            console.log(`📤 Sending ${parsedResponse.length} suggestions to frontend`);
-            parsedResponse.forEach((s, i) => {
-              console.log(`   ${i+1}. ${s.title}: ${s.label}`);
-            });
-          } catch (e) {
-            console.log('📤 Response preview:', result.response.substring(0, 200));
-          }
+          console.log(`📤 Sending ${result.suggestions.length} suggestions to frontend`);
+          result.suggestions.forEach((s, i) => {
+            console.log(`   ${i+1}. "${s}"`);
+          });
           
           return res.json({
             success: true,
-            response: result.response,
+            response: JSON.stringify(result.suggestions), // Convert array to JSON string
             chat_history_id: chat_history_id,
             isAIGenerated: true
           });
@@ -647,6 +656,71 @@ app.delete('/api/chat-session/:userId/:sessionId', async (req, res) => {
   } catch (error) {
     console.error('Error in delete chat session endpoint:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Delete user account (for testing onboarding)
+app.delete('/api/delete-account/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    console.log(`🗑️ Deleting user account: ${userId}`);
+
+    // Create admin client with service key for auth operations
+    const { createClient } = require('@supabase/supabase-js');
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY, // Need service key for admin operations
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    );
+
+    // Delete user data first
+    console.log('📝 Deleting user data...');
+    
+    // Delete chat history
+    await supabase.from('chat_history').delete().eq('user_id', userId);
+    
+    // Delete campaigns
+    await supabase.from('campaigns').delete().eq('user_id', userId);
+    
+    // Delete schedule
+    await supabase.from('schedule').delete().eq('user_id', userId);
+    
+    // Delete user profile
+    await supabase.from('users').delete().eq('id', userId);
+
+    // Delete auth user (requires service key)
+    console.log('🔐 Deleting auth user...');
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    
+    if (authError) {
+      console.error('Error deleting auth user:', authError);
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Failed to delete auth user',
+        details: authError.message 
+      });
+    }
+
+    console.log('✅ User account deleted successfully');
+    res.json({ 
+      success: true, 
+      message: 'User account deleted successfully',
+      userId: userId 
+    });
+
+  } catch (error) {
+    console.error('Error deleting user account:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Internal server error',
+      details: error.message 
+    });
   }
 });
 
