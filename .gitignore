@@ -27,8 +27,7 @@ docs/
 *.env
 *.env.*
 !.env.example
-.dockerignore
-Dockerfile
+!server/Dockerfile
 docker-compose*.yml
 *.pem
 *.log
@@ -47,6 +46,8 @@ test*
 .yarn/
 .vercel
 coverage/
+# Allow database/schema.sql
+!database/schema.sql
 # Ignore root-level scripts, docs, and non-source files
 /build-*
 /deploy*.sh
