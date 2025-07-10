@@ -1,3 +1,69 @@
+# --- Only keep source code and essential config for Next.js/Node.js ---
+# Ignore all by default
+/*
+# But NOT these:
+!src/
+!server/
+!public/
+!package.json
+!package-lock.json
+!tsconfig.json
+!next.config.ts
+!postcss.config.mjs
+!tailwind.config.js
+!README.md
+!.env.example
+!.gitignore
+# If you want to keep .vscode for workspace settings, remove the next line
+.vscode/
+# Ignore build, env, scripts, docs, database, docker, test, and misc
+node_modules/
+.next/
+out/
+build/
+database/
+docs/
+*.sh
+*.md
+*.sql
+.env
+.env.*
+!.env.example
+.dockerignore
+Dockerfile
+docker-compose*.yml
+*.pem
+*.log
+*.tsbuildinfo
+next-env.d.ts
+*.local
+*.backup
+*.old.js
+test*
+*.test.*
+*.spec.*
+*.config.*
+*.lock
+/.pnp
+.pnp.*
+.yarn/
+.vercel
+coverage/
+# Ignore root-level scripts, docs, and non-source files
+/build-*
+/deploy*.sh
+/DOCKER_README.md
+/docker-compose*.yml
+/README.md
+/DEV_SETUP.md
+/INSTALL.md
+/SETUP_COMPLETE.md
+/SUGGESTIONS_FEATURE.md
+/MARKDOWN_TEST.md
+/REALTIME_WEBSOCKET_SUMMARY.md
+/DEPLOY_SERVER.md
+/database/
+/docs/
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
