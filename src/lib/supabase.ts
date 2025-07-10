@@ -19,7 +19,9 @@ function getSupabaseClient() {
         // Persist session trong localStorage
         persistSession: true,
         // Detect session trong URL
-        detectSessionInUrl: true
+        detectSessionInUrl: true,
+        // Tắt email confirmation flow
+        flowType: 'pkce'
       }
     })
   }

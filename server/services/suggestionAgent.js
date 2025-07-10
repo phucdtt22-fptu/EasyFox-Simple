@@ -113,8 +113,11 @@ Chỉ trả về JSON array như ví dụ trên, không có text nào khác!`;
           suggestions: suggestions
         };
       } else {
-        console.log('⚠️ No valid suggestions found, generating fallback');
-        return this.getFallbackSuggestions(businessContext?.notes);
+        console.log('❌ No valid suggestions found');
+        return {
+          success: false,
+          suggestions: []
+        };
       }
 
     } catch (error) {
@@ -131,29 +134,11 @@ Chỉ trả về JSON array như ví dụ trên, không có text nào khác!`;
         console.error('🔑 API Key error detected');
       }
       
-      console.log('🔄 Falling back to default suggestions');
-      return this.getFallbackSuggestions(businessContext?.notes);
+      return {
+        success: false,
+        suggestions: []
+      };
     }
-  }
-
-  // Fallback suggestions when AI fails
-  getFallbackSuggestions(hasOnboarding) {
-    const fallbackSuggestions = hasOnboarding ? [
-      "Tôi muốn tạo chiến dịch mới",
-      "Xem chiến dịch hiện tại", 
-      "Giúp lên lịch đăng bài",
-      "Tư vấn tối ưu nội dung"
-    ] : [
-      "Tôi cần thiết lập doanh nghiệp",
-      "Hướng dẫn tôi bắt đầu",
-      "EasyFox có gì hay ho?",
-      "Tạo chiến dịch đầu tiên"
-    ];
-
-    return {
-      success: true,
-      suggestions: fallbackSuggestions
-    };
   }
 
   // Helper method to detect business type

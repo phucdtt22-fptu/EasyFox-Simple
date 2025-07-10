@@ -1,12 +1,13 @@
 const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io');
 const cors = require('cors');
 const axios = require('axios');
 const { createClient } = require('@supabase/supabase-js');
-const LangChainMarketingAgent = require('./services/langchainMarketingAgent');
-const SuggestionAgent = require('./services/suggestionAgent');
 require('dotenv').config();
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
@@ -15,14 +16,26 @@ const corsOptions = {
   origin: NODE_ENV === 'production' 
     ? [
         process.env.FRONTEND_URL,
-        /\.app\.github\.dev$/,  // Allow Codespace URLs
-        /\.vercel\.app$/,       // Allow Vercel deployments
-        /\.netlify\.app$/       // Allow Netlify deployments
+        'https://e.tinmoius.com',      
+        'https://e.tinmoius.com:3000', 
+        /\.app\.github\.dev$/,  
+        /\.vercel\.app$/,       
+        /\.netlify\.app$/       
       ]
-    : true, // Allow all origins in development
+    : true, 
   credentials: true,
   optionsSuccessStatus: 200
 };
+
+// Initialize Socket.IO with CORS settings
+const io = socketIo(server, {
+  cors: corsOptions,
+  pingTimeout: 60000,
+  pingInterval: 25000
+});
+
+// WebSocket connections storage
+const socketConnections = new Map(); // userId -> socket
 
 // Middleware
 app.use(cors(corsOptions));
@@ -35,451 +48,194 @@ app.use((req, res, next) => {
   next();
 });
 
-// Validate environment variables
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-  console.error('❌ Missing required environment variables for Supabase');
+// Initialize Supabase
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('❌ Missing Supabase configuration');
   process.exit(1);
 }
 
-if (!process.env.OPENAI_API_KEY) {
-  console.error('❌ OPENAI_API_KEY is required for AI functionality');
-  process.exit(1);
-}
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+console.log('✅ Supabase initialized');
 
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('❌ SUPABASE_SERVICE_ROLE_KEY is required for admin operations');
-  process.exit(1);
-}
+// Helper function to add a chat message to database
+async function addChatMessage(userId, chatSessionId, messageType, content, metadata = {}) {
+  try {
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .insert([{
+        user_id: userId,
+        chat_session_id: chatSessionId,
+        message_type: messageType,
+        content,
+        metadata
+      }])
+      .select()
+      .single();
 
-// Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
-
-// Initialize AI agents
-const langchainAgent = new LangChainMarketingAgent(supabase);
-const suggestionAgent = new SuggestionAgent();
-
-// Rate limiting storage
-const rateLimitMap = new Map();
-const newChatLimitMap = new Map(); // Track new chat creation
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const MAX_MESSAGES_PER_MINUTE = 10;
-const MIN_MESSAGE_INTERVAL = 2000; // 2 seconds between messages
-const MIN_NEW_CHAT_INTERVAL = 30000; // 30 seconds between new chats
-const MAX_NEW_CHATS_PER_HOUR = 5; // Maximum 5 new chats per hour
-
-// Spam detection focused on preventing rapid new chat creation
-const spamDetection = {
-  maxMessageLength: 10000, // Increased from 2000 to 10000 to allow longer messages
-  repetitiveThreshold: 0.95, // Increased from 0.9 to 0.95 - only block nearly identical messages
-  bannedWords: [], // Removed all banned words to allow more content
-  
-  checkSpam: (message, userHistory) => {
-    // Only check for extremely long messages (10k+ characters)
-    if (message.length > spamDetection.maxMessageLength) {
-      return { isSpam: true, reason: 'Tin nhắn cực kỳ dài (hơn 10,000 ký tự)' };
+    if (error) {
+      console.error('❌ Error adding chat message:', error);
+      throw error;
     }
 
-    // Check for highly repetitive messages (only exact or nearly exact duplicates)
-    if (userHistory && userHistory.length > 0) {
-      const recentMessages = userHistory.slice(-2); // Only last 2 messages
-      for (const historyMsg of recentMessages) {
-        if (historyMsg.question) {
-          const similarity = calculateSimilarity(message, historyMsg.question);
-          if (similarity > spamDetection.repetitiveThreshold) {
-            return { isSpam: true, reason: 'Tin nhắn trùng lặp hoàn toàn' };
-          }
-        }
+    console.log(`✅ Added ${messageType} message:`, data.id);
+    return data;
+  } catch (error) {
+    console.error('❌ Database error:', error);
+    throw error;
+  }
+}
+
+// Helper function to send stream event via WebSocket
+function sendStreamEvent(userId, event) {
+  const socket = socketConnections.get(userId);
+  if (socket) {
+    socket.emit('stream_event', event);
+    console.log('📡 Sent stream event:', event.type, 'to user:', userId);
+  } else {
+    console.log('⚠️ No socket connection for user:', userId);
+  }
+}
+
+// WebSocket handling
+io.on('connection', (socket) => {
+  console.log('🔌 New socket connection:', socket.id);
+
+  // Handle authentication
+  socket.on('authenticate', (data) => {
+    const { userId } = data;
+    
+    if (userId) {
+      socketConnections.set(userId, socket);
+      console.log('✅ Socket authenticated for user:', userId);
+      socket.emit('authenticated', { success: true });
+    } else {
+      console.log('❌ Socket authentication failed - no userId');
+      socket.emit('authenticated', { success: false, error: 'No userId provided' });
+    }
+  });
+
+  // Handle disconnection
+  socket.on('disconnect', () => {
+    console.log('🔌 Socket disconnected:', socket.id);
+    // Find and remove user from connections
+    for (const [userId, userSocket] of socketConnections.entries()) {
+      if (userSocket === socket) {
+        socketConnections.delete(userId);
+        console.log('✅ Removed user from connections:', userId);
+        break;
       }
     }
+  });
+});
 
-    return { isSpam: false };
-  }
-};
-
-// Calculate string similarity
-function calculateSimilarity(str1, str2) {
-  if (!str1 || !str2) return 0;
-  
-  const longer = str1.length > str2.length ? str1 : str2;
-  const shorter = str1.length > str2.length ? str2 : str1;
-  
-  if (longer.length === 0) return 1.0;
-  
-  const editDistance = levenshteinDistance(longer, shorter);
-  return (longer.length - editDistance) / longer.length;
-}
-
-function levenshteinDistance(str1, str2) {
-  const matrix = [];
-  
-  for (let i = 0; i <= str2.length; i++) {
-    matrix[i] = [i];
-  }
-  
-  for (let j = 0; j <= str1.length; j++) {
-    matrix[0][j] = j;
-  }
-  
-  for (let i = 1; i <= str2.length; i++) {
-    for (let j = 1; j <= str1.length; j++) {
-      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-        matrix[i][j] = matrix[i - 1][j - 1];
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j] + 1
-        );
-      }
-    }
-  }
-  
-  return matrix[str2.length][str1.length];
-}
-
-// Check if user is creating new chats too frequently
-function checkNewChatSpam(userId) {
-  const now = Date.now();
-  const userKey = `newchat_${userId}`;
-  
-  if (!newChatLimitMap.has(userKey)) {
-    newChatLimitMap.set(userKey, []);
-  }
-  
-  const userNewChats = newChatLimitMap.get(userKey);
-  
-  // Clean old entries (older than 1 hour)
-  const oneHourAgo = now - (60 * 60 * 1000);
-  const recentChats = userNewChats.filter(timestamp => timestamp > oneHourAgo);
-  newChatLimitMap.set(userKey, recentChats);
-  
-  // Check if last chat was created too recently
-  if (recentChats.length > 0) {
-    const lastChatTime = Math.max(...recentChats);
-    if (now - lastChatTime < MIN_NEW_CHAT_INTERVAL) {
-      return { 
-        isSpam: true, 
-        reason: `Vui lòng đợi ${Math.ceil(MIN_NEW_CHAT_INTERVAL / 1000)} giây trước khi tạo chat mới` 
+// Simple mock AI response function
+async function getMockAIResponse(message, userId, chatSessionId) {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      // Send AI response stream event
+      const aiEvent = {
+        type: 'ai_response',
+        content: `Cảm ơn bạn đã gửi tin nhắn: "${message}". Tôi là EasyFox AI và tôi sẽ giúp bạn với marketing!`,
+        messageId: `ai_${Date.now()}`,
+        chatSessionId,
+        timestamp: new Date().toISOString()
       };
-    }
-  }
-  
-  // Check if too many chats created in the last hour
-  if (recentChats.length >= MAX_NEW_CHATS_PER_HOUR) {
-    return { 
-      isSpam: true, 
-      reason: `Bạn đã tạo quá nhiều chat mới. Vui lòng thử lại sau 1 giờ.` 
-    };
-  }
-  
-  // Record this new chat creation
-  recentChats.push(now);
-  newChatLimitMap.set(userKey, recentChats);
-  
-  return { isSpam: false };
+      
+      sendStreamEvent(userId, aiEvent);
+      
+      resolve({
+        success: true,
+        response: aiEvent.content
+      });
+    }, 1000); // Simulate processing time
+  });
 }
 
-// Chat endpoint - uses Marketing Agent instead of N8N
+// Chat API endpoint
 app.post('/api/chat', async (req, res) => {
-  console.log('🔥 Chat API called!', new Date().toISOString());
+  console.log('🔥 Chat API called (New Structure)!', new Date().toISOString());
   console.log('📨 Request body:', req.body);
   
   try {
-    const { question, user_id, chat_history_id, user_info, campaigns, is_welcome_message, is_suggestion_request, onboarding_data } = req.body;
-
-    // Special handling for onboarding data submission
-    if (onboarding_data && question === "ONBOARDING_DATA_SUBMISSION") {
-      console.log('📝 Direct onboarding data submission detected');
-      
-      try {
-        // Process onboarding data directly without suggestion detection
-        const agentResult = await langchainAgent.processMessage(
-          user_id,
-          "Dữ liệu onboarding được gửi", // Non-triggering message
-          null, // No existing onboarding notes yet
-          [], // No chat history needed for onboarding
-          onboarding_data // Pass the raw onboarding data
-        );
-
-        if (agentResult.success) {
-          return res.json({
-            success: true,
-            response: agentResult.response,
-            chat_history_id: chat_history_id
-          });
-        } else {
-          throw new Error(agentResult.error || 'Onboarding processing failed');
-        }
-      } catch (error) {
-        console.error('❌ Error processing onboarding data:', error);
-        return res.status(500).json({
-          success: false,
-          error: 'Không thể xử lý thông tin onboarding. Vui lòng thử lại.'
-        });
-      }
-    }
+    const { message, userId, chatSessionId, userMessageId } = req.body;
 
     // Validate required fields
-    if (!question || !user_id || !user_info) {
+    if (!message || !userId || !chatSessionId) {
       console.log('❌ Missing required fields');
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: question, user_id, user_info'
+        error: 'Missing required fields: message, userId, chatSessionId'
       });
     }
 
-    // Special handling for suggestion requests - SKIP ALL OTHER CHECKS
-    if (is_suggestion_request) {
-      console.log('� Using lightweight SuggestionAgent for faster suggestions');
-      
-      try {
-        // Get user onboarding notes (as text paragraph, not JSON)
-        const onboardingNotes = user_info?.notes || null;
-        
-        // Get recent chat history for suggestion context
-        let recentChatHistory = [];
-        if (chat_history_id) {
-          const { data: chatHistoryData, error: chatError } = await supabase
-            .from('chat_history')
-            .select('*')
-            .eq('user_id', user_id)
-            .eq('chat_session_id', chat_history_id)
-            .order('created_at', { ascending: false })
-            .limit(3);
+    console.log('📝 Processing message for user:', userId, 'session:', chatSessionId);
 
-          if (!chatError && chatHistoryData) {
-            recentChatHistory = chatHistoryData.reverse().map(msg => ({
-              role: msg.question ? 'user' : 'assistant',
-              content: msg.question || msg.ai_response
-            }));
-          }
-        }
-        
-        console.log('🔍 Suggestion request context:');
-        console.log('   - Has onboarding notes:', onboardingNotes ? 'YES' : 'NO');
-        console.log('   - Chat history length:', recentChatHistory.length);
-        if (onboardingNotes) {
-          console.log('   - Business preview:', onboardingNotes.substring(0, 150) + '...');
-        }
-        if (recentChatHistory.length > 0) {
-          console.log('   - Recent messages:');
-          recentChatHistory.forEach((msg, i) => {
-            console.log(`     ${i+1}. ${msg.role}: ${msg.content.substring(0, 80)}...`);
-          });
-        }
+    // Send tool start event
+    sendStreamEvent(userId, {
+      type: 'tool_start',
+      toolName: 'ProcessMessage',
+      messageId: userMessageId,
+      chatSessionId,
+      timestamp: new Date().toISOString()
+    });
 
-        const result = await suggestionAgent.generateSuggestions(
-          user_info,
-          recentChatHistory.length > 0 ? {
-            question: recentChatHistory[recentChatHistory.length - 1]?.role === 'user' ? recentChatHistory[recentChatHistory.length - 1]?.content : null,
-            ai_response: recentChatHistory[recentChatHistory.length - 1]?.role === 'assistant' ? recentChatHistory[recentChatHistory.length - 1]?.content : null
-          } : null,
-          { notes: onboardingNotes }
-        );
-        
-        if (result.success) {
-          console.log('✅ AI suggestions generated successfully');
-          
-          // Log the response to ensure it's correct
-          console.log(`📤 Sending ${result.suggestions.length} suggestions to frontend`);
-          result.suggestions.forEach((s, i) => {
-            console.log(`   ${i+1}. "${s}"`);
-          });
-          
-          return res.json({
-            success: true,
-            response: JSON.stringify(result.suggestions), // Convert array to JSON string
-            chat_history_id: chat_history_id,
-            isAIGenerated: true
-          });
-        } else {
-          throw new Error(result.error || 'AI suggestion generation failed');
-        }
-      } catch (error) {
-        console.error('❌ Error generating AI suggestions:', error);
-        
-        // Return error instead of fallback - force frontend to handle gracefully
-        return res.status(500).json({
-          success: false,
-          error: 'Không thể tạo gợi ý AI. Vui lòng thử lại sau.',
-          details: error.message
-        });
-      }
-    }
+    // Process with mock AI (replace with real AI later)
+    const aiResult = await getMockAIResponse(message, userId, chatSessionId);
 
-    // Special handling for welcome messages (new chat creation)
-    if (is_welcome_message) {
-      // Check if user is creating new chats too frequently
-      const newChatSpamCheck = checkNewChatSpam(user_id);
-      if (newChatSpamCheck.isSpam) {
-        return res.status(429).json({
-          success: false,
-          error: newChatSpamCheck.reason
-        });
-      }
-    }
-
-    // Rate limiting check (skip for welcome messages)
-    if (!is_welcome_message) {
-      const now = Date.now();
-      const userKey = `rate_limit_${user_id}`;
-      const userRateData = rateLimitMap.get(userKey) || { messages: [], lastMessage: 0 };
-
-      // Check minimum interval between messages
-      if (now - userRateData.lastMessage < MIN_MESSAGE_INTERVAL) {
-        return res.status(429).json({
-          success: false,
-          error: 'Vui lòng chờ ít nhất 2 giây giữa các tin nhắn'
-        });
-      }
-
-      // Clean old messages outside the window
-      userRateData.messages = userRateData.messages.filter(
-        timestamp => now - timestamp < RATE_LIMIT_WINDOW
+    if (aiResult.success) {
+      // Save AI response to database
+      await addChatMessage(
+        userId,
+        chatSessionId,
+        'ai',
+        aiResult.response,
+        { processed_by: 'mock_ai' }
       );
 
-      // Check rate limit
-      if (userRateData.messages.length >= MAX_MESSAGES_PER_MINUTE) {
-        return res.status(429).json({
-          success: false,
-          error: 'Quá nhiều tin nhắn. Vui lòng chờ 1 phút trước khi gửi tiếp'
-        });
-      }
-
-      // Update rate limit data
-      userRateData.messages.push(now);
-      userRateData.lastMessage = now;
-      rateLimitMap.set(userKey, userRateData);
-    }
-
-    // Get chat history for context (skip for welcome messages to ensure fresh start)
-    let chatHistory = [];
-    if (!is_welcome_message) {
-      let chatHistoryQuery = supabase
-        .from('chat_history')
-        .select('*')
-        .eq('user_id', user_id);
-
-      // If chat_history_id (session_id) is provided, filter by session for focused context
-      if (chat_history_id) {
-        chatHistoryQuery = chatHistoryQuery.eq('chat_session_id', chat_history_id);
-      }
-
-      const { data: chatHistoryData, error: chatError } = await chatHistoryQuery
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (chatError) {
-        console.error('Error fetching chat history:', chatError);
-      } else {
-        chatHistory = chatHistoryData || [];
-      }
-
-      // SPAM DETECTION COMPLETELY DISABLED FOR ALL REQUESTS
-      console.log('✅ SPAM DETECTION DISABLED - ALL MESSAGES ALLOWED');
-
-      // New chat creation spam check (skip for existing chat sessions)
-      if (!chat_history_id) {
-        const newChatSpamCheck = checkNewChatSpam(user_id);
-        if (newChatSpamCheck.isSpam) {
-          return res.status(400).json({
-            success: false,
-            error: `Tin nhắn bị từ chối: ${newChatSpamCheck.reason}`
-          });
-        }
-      }
-    }
-
-    console.log('🤖 Processing message with LangChain Marketing Agent...');
-
-    try {
-      // Get user onboarding notes (as text paragraph, not JSON)
-      const onboardingNotes = user_info?.notes || null;
-
-      console.log('🔍 Checking user onboarding notes:');
-      console.log('   - Has notes:', onboardingNotes ? 'YES' : 'NO');
-      if (onboardingNotes) {
-        console.log('   - Notes preview:', onboardingNotes.substring(0, 100) + '...');
-      }
-
-      // Process message with LangChain Marketing Agent
-      // Pass the text notes directly - AI will decide if onboarding is needed
-      const agentResult = await langchainAgent.processMessage(
-        user_id, 
-        question, 
-        onboardingNotes, // Pass the text notes directly, or null if not exists
-        chatHistory.reverse().map(msg => ({
-          role: msg.question ? 'user' : 'assistant',
-          content: msg.question || msg.ai_response
-        })),
-        onboarding_data // Pass onboarding data if provided
-      );
-
-      console.log('🎯 LangChain Agent Result:', agentResult);
-
-      if (!agentResult.success) {
-        throw new Error(agentResult.error || 'LangChain Marketing agent failed');
-      }
-
-      // Prepare response
-      const response = {
-        success: true,
-        response: agentResult.response
-      };
-
-      // Add tool invocation if present (for onboarding form)
-      if (agentResult.toolInvocation) {
-        console.log('🔧 Including toolInvocation in response:', agentResult.toolInvocation);
-        response.toolInvocations = [agentResult.toolInvocation]; // Convert singular to array
-      }
-
-      // Add intermediate steps if present (for debugging)
-      if (agentResult.intermediateSteps) {
-        response.intermediateSteps = agentResult.intermediateSteps;
-      }
-
-      res.json(response);
-
-    } catch (agentError) {
-      console.error('❌ Marketing Agent error:', agentError);
-      
-      // Fallback response
-      const fallbackResponse = !onboardingNotes
-        ? `Xin chào ${user_info.name}!
-
-Tôi là trợ lý AI marketing của EasyFox. Để có thể hỗ trợ bạn tốt nhất, tôi cần tìm hiểu thêm về doanh nghiệp của bạn.
-
-**Bạn có thể chia sẻ với tôi:**
-1. Loại hình kinh doanh (nail salon, spa, nhà hàng, café, v.v.)
-2. Địa điểm kinh doanh
-3. Đối tượng khách hàng chính
-4. Ngân sách marketing hàng tháng (ước tính)
-5. Các mạng xã hội hiện tại đang sử dụng
-
-Thông tin này sẽ giúp tôi tạo ra chiến dịch marketing phù hợp và hiệu quả cho doanh nghiệp của bạn!`
-        : `Tôi đã có thông tin cơ bản về doanh nghiệp của bạn rồi! 
-
-**Tôi có thể giúp bạn:**
-- Tạo chiến dịch marketing hoàn chỉnh
-- Lên lịch đăng bài với content brief chi tiết
-- Tối ưu hóa chiến lược nội dung
-- Phân tích đối thủ cạnh tranh
-- Đề xuất ý tưởng content mới
-
-Bạn muốn tôi hỗ trợ điều gì hôm nay?`;
-
-      res.json({
-        success: true,
-        response: fallbackResponse
+      // Send tool end event
+      sendStreamEvent(userId, {
+        type: 'tool_end',
+        toolName: 'ProcessMessage',
+        output: 'Message processed successfully',
+        messageId: userMessageId,
+        chatSessionId,
+        timestamp: new Date().toISOString()
       });
+
+      console.log('✅ Message processing successful');
+      
+      return res.json({
+        success: true,
+        messageId: userMessageId,
+        chatSessionId: chatSessionId
+      });
+    } else {
+      throw new Error('AI processing failed');
     }
 
   } catch (error) {
-    console.error('Error in chat endpoint:', error);
-    res.status(500).json({
+    console.error('❌ Chat API error:', error);
+    
+    // Try to save error message
+    try {
+      const { userId, chatSessionId } = req.body;
+      if (userId && chatSessionId) {
+        await addChatMessage(
+          userId,
+          chatSessionId,
+          'ai',
+          'Xin lỗi, đã có lỗi xảy ra khi xử lý tin nhắn của bạn. Vui lòng thử lại sau.',
+          { error: true, originalError: error.message }
+        );
+      }
+    } catch (saveError) {
+      console.error('❌ Error saving error message:', saveError);
+    }
+
+    return res.status(500).json({
       success: false,
       error: 'Internal server error'
     });
@@ -488,252 +244,33 @@ Bạn muốn tôi hỗ trợ điều gì hôm nay?`;
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', message: 'EasyFox Backend is running' });
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    connections: socketConnections.size
+  });
 });
 
-// Get user campaigns
-app.get('/api/campaigns/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    const { data, error } = await supabase
-      .from('campaigns')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      return res.status(500).json({ success: false, error: error.message });
-    }
-
-    res.json({ success: true, data });
-  } catch (error) {
-    console.error('Error fetching campaigns:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
-  }
+// Start server
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT} in ${NODE_ENV} mode`);
+  console.log(`📡 WebSocket server ready`);
+  console.log(`🔗 Health check: http://localhost:${PORT}/health`);
 });
 
-// Get schedule items
-app.get('/api/schedule/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    const { data, error } = await supabase
-      .from('schedule')
-      .select(`
-        *,
-        campaigns(name)
-      `)
-      .eq('user_id', userId)
-      .order('scheduled_date', { ascending: true });
-
-    if (error) {
-      return res.status(500).json({ success: false, error: error.message });
-    }
-
-    res.json({ success: true, data });
-  } catch (error) {
-    console.error('Error fetching schedule:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
-  }
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('🛑 SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
 });
 
-// Get chat history with pagination and session filtering
-app.get('/api/chat-history/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { session_id, page = 1, limit = 50 } = req.query;
-
-    console.log(`📚 Fetching chat history for user: ${userId}`);
-
-    let query = supabase
-      .from('chat_history')
-      .select('*')
-      .eq('user_id', userId);
-
-    // Filter by session if provided
-    if (session_id) {
-      query = query.eq('chat_session_id', session_id);
-    }
-
-    const offset = (parseInt(page) - 1) * parseInt(limit);
-    
-    const { data, error, count } = await query
-      .order('created_at', { ascending: false })
-      .range(offset, offset + parseInt(limit) - 1);
-
-    if (error) {
-      console.error('Error fetching chat history:', error);
-      return res.status(500).json({ success: false, error: error.message });
-    }
-
-    res.json({ 
-      success: true, 
-      data: data || [],
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total: count || data?.length || 0
-      }
-    });
-  } catch (error) {
-    console.error('Error in chat history endpoint:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
-
-// Get all chat sessions for a user
-app.get('/api/chat-sessions/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    console.log(`🗂️ Fetching chat sessions for user: ${userId}`);
-
-    const { data, error } = await supabase
-      .from('chat_history')
-      .select('chat_session_id, created_at, question')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching chat sessions:', error);
-      return res.status(500).json({ success: false, error: error.message });
-    }
-
-    // Group by session and get first message of each session
-    const sessions = {};
-    data?.forEach(msg => {
-      if (!sessions[msg.chat_session_id]) {
-        sessions[msg.chat_session_id] = {
-          session_id: msg.chat_session_id,
-          created_at: msg.created_at,
-          first_message: msg.question,
-          message_count: 1
-        };
-      } else {
-        sessions[msg.chat_session_id].message_count++;
-        // Keep the earliest message as first_message
-        if (new Date(msg.created_at) < new Date(sessions[msg.chat_session_id].created_at)) {
-          sessions[msg.chat_session_id].first_message = msg.question;
-          sessions[msg.chat_session_id].created_at = msg.created_at;
-        }
-      }
-    });
-
-    const sessionList = Object.values(sessions).sort((a, b) => 
-      new Date(b.created_at) - new Date(a.created_at)
-    );
-
-    res.json({ 
-      success: true, 
-      data: sessionList
-    });
-  } catch (error) {
-    console.error('Error in chat sessions endpoint:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
-
-// Delete chat session
-app.delete('/api/chat-session/:userId/:sessionId', async (req, res) => {
-  try {
-    const { userId, sessionId } = req.params;
-
-    console.log(`🗑️ Deleting chat session: ${sessionId} for user: ${userId}`);
-
-    const { error } = await supabase
-      .from('chat_history')
-      .delete()
-      .eq('user_id', userId)
-      .eq('chat_session_id', sessionId);
-
-    if (error) {
-      console.error('Error deleting chat session:', error);
-      return res.status(500).json({ success: false, error: error.message });
-    }
-
-    res.json({ success: true, message: 'Chat session deleted successfully' });
-  } catch (error) {
-    console.error('Error in delete chat session endpoint:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
-
-// Delete user account (for testing onboarding)
-app.delete('/api/delete-account/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    
-    console.log(`🗑️ Deleting user account: ${userId}`);
-
-    // Create admin client with service key for auth operations
-    const { createClient } = require('@supabase/supabase-js');
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY, // Need service key for admin operations
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    );
-
-    // Delete user data first
-    console.log('📝 Deleting user data...');
-    
-    // Delete chat history
-    await supabase.from('chat_history').delete().eq('user_id', userId);
-    
-    // Delete campaigns
-    await supabase.from('campaigns').delete().eq('user_id', userId);
-    
-    // Delete schedule
-    await supabase.from('schedule').delete().eq('user_id', userId);
-    
-    // Delete user profile
-    await supabase.from('users').delete().eq('id', userId);
-
-    // Delete auth user (requires service key)
-    console.log('🔐 Deleting auth user...');
-    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
-    
-    if (authError) {
-      console.error('Error deleting auth user:', authError);
-      return res.status(500).json({ 
-        success: false, 
-        error: 'Failed to delete auth user',
-        details: authError.message 
-      });
-    }
-
-    console.log('✅ User account deleted successfully');
-    res.json({ 
-      success: true, 
-      message: 'User account deleted successfully',
-      userId: userId 
-    });
-
-  } catch (error) {
-    console.error('Error deleting user account:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Internal server error',
-      details: error.message 
-    });
-  }
-});
-
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 EasyFox Backend server running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔧 Environment: ${NODE_ENV}`);
-  
-  if (process.env.CODESPACE_NAME) {
-    console.log(`🌐 Codespace URL: https://${process.env.CODESPACE_NAME}-${PORT}.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}`);
-  }
-  
-  if (NODE_ENV === 'production') {
-    console.log(`🌍 Production server ready`);
-  }
+process.on('SIGINT', () => {
+  console.log('🛑 SIGINT received, shutting down gracefully');
+  server.close(() => {
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
 });

@@ -7,13 +7,68 @@ export interface User {
   updated_at: string
 }
 
+// New chat message structure - each message is a separate row
 export interface ChatMessage {
+  id: string
+  user_id: string
+  chat_session_id: string
+  message_type: 'user' | 'ai' | 'tool_start' | 'tool_end' | 'system'
+  content: string | null
+  metadata?: {
+    toolName?: string
+    toolInput?: Record<string, unknown>
+    toolOutput?: unknown
+    toolinvocations?: Array<{
+      toolName: string
+      args: Record<string, unknown>
+      result: string
+      observation?: string
+      preview?: {
+        action?: string
+        title?: string
+        summary?: string[]
+        details?: string[]
+        data?: string
+        tableHeaders?: string[]
+        tableData?: Record<string, unknown>[]
+        totalItems?: number
+        status?: string
+        stats?: Record<string, unknown>
+      }
+    }>
+    original_id?: string // For migration tracking
+  } | null
+  parent_message_id?: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Legacy interface for backward compatibility during migration
+export interface LegacyChatMessage {
   id: string
   user_id: string
   question: string | null // Can be null for AI-initiated messages
   ai_response: string
   chat_session_id: string
   created_at: string
+  toolinvocations?: Array<{
+    toolName: string
+    args: Record<string, unknown>
+    result: string
+    observation?: string
+    preview?: {
+      action?: string
+      title?: string
+      summary?: string[]
+      details?: string[]
+      data?: string
+      tableHeaders?: string[]
+      tableData?: Record<string, unknown>[]
+      totalItems?: number
+      status?: string
+      stats?: Record<string, unknown>
+    }
+  }> | null
 }
 
 export interface Campaign {

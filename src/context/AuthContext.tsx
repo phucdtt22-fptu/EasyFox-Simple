@@ -43,12 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const signUp = async (email: string, password: string, name: string) => {
-    // Sử dụng production URL làm default nếu không có biến môi trường
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://e.tinmoius.com'
-    const redirectPath = process.env.NEXT_PUBLIC_AUTH_REDIRECT_URL || '/auth/callback'
-    const emailRedirectTo = `${siteUrl}${redirectPath}`
-    
-    console.log('Starting signUp with:', { email, name, emailRedirectTo })
+    console.log('Starting signUp with:', { email, name })
     
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -58,8 +53,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           data: {
             name,
           },
-          // Cấu hình redirect URL cho email confirmation
-          emailRedirectTo,
+          // Tắt email confirmation để user có thể vào luôn
+          emailRedirectTo: undefined,
         },
       })
 
@@ -85,6 +80,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           console.log('User record created successfully')
         }
+
+        // Tự động set user state để đăng nhập luôn
+        setUser(data.user)
       }
 
       return { data, error }
