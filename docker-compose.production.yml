@@ -5,16 +5,16 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - API_URL=https://be.tinmoius.com
-      - NEXT_PUBLIC_SUPABASE_URL=https://niyvcieaapojhoqyinmg.supabase.co
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5peXZjaWVhYXBvamhvcXlpbm1nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk2MzMwODAsImV4cCI6MjA2NTIwOTA4MH0.Lc6BlY0As7UcgdVDJzTytLyEmq6TlzxTPBdUcfncLYY
-      - NEXT_PUBLIC_API_URL=https://be.tinmoius.com
+      - API_URL=${API_URL}
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
       # Email Authentication Configuration
-      - NEXT_PUBLIC_SITE_URL=https://e.tinmoius.com
-      - NEXT_PUBLIC_AUTH_REDIRECT_URL=/auth/callback
-      - NEXT_PUBLIC_AUTH_ERROR_URL=/login?error=auth_failed
+      - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
+      - NEXT_PUBLIC_AUTH_REDIRECT_URL=${NEXT_PUBLIC_AUTH_REDIRECT_URL}
+      - NEXT_PUBLIC_AUTH_ERROR_URL=${NEXT_PUBLIC_AUTH_ERROR_URL}
       # OpenAI Configuration - Only OpenAI, no Gemini/N8N
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-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}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_CHAT_MODEL=${OPENAI_CHAT_MODEL:-gpt-4o-mini}
       - OPENAI_SUGGESTION_MODEL=${OPENAI_SUGGESTION_MODEL:-gpt-3.5-turbo}
     depends_on:
@@ -28,13 +28,13 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - NEXT_PUBLIC_SUPABASE_URL=https://niyvcieaapojhoqyinmg.supabase.co
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5peXZjaWVhYXBvamhvcXlpbm1nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk2MzMwODAsImV4cCI6MjA2NTIwOTA4MH0.Lc6BlY0As7UcgdVDJzTytLyEmq6TlzxTPBdUcfncLYY
-      - SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5peXZjaWVhYXBvamhvcXlpbm1nIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTYzMzA4MCwiZXhwIjoyMDY1MjA5MDgwfQ.PQBGm_9whxbRmxuTaNTw9NEejGgNnQUvWK5P49ib9Gk
-      - JWT_SECRET=easyfox-jwt-secret-key-2025-production-11022004
-      - FRONTEND_URL=https://e.tinmoius.com
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - FRONTEND_URL=${FRONTEND_URL}
       # OpenAI Configuration - Only OpenAI, no Gemini/N8N
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-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}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_CHAT_MODEL=${OPENAI_CHAT_MODEL:-gpt-4o-mini}
       - OPENAI_SUGGESTION_MODEL=${OPENAI_SUGGESTION_MODEL:-gpt-3.5-turbo}
       # CORS Configuration
